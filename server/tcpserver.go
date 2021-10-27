@@ -5,8 +5,9 @@ import (
    "fmt"
    "net"
    "os"
-   "strings"
    "time"
+   "strings"
+   "github.com/asccclass/staticfileserver/libs/ip" 
 )
 
 func main() {
@@ -23,7 +24,14 @@ func main() {
       return
    }
    defer l.Close()
-   fmt.Print("TCP server start and listening.\n")
+
+   // Get IP
+   device := os.Getenv("InternetDevice")
+   if device == "" {
+      device = "wlan0"
+   }
+   ip, _ := IPService.NewIP(device)
+   fmt.Printf("TCP server start and listening at %s:%v.\n", ip.LocalIP, PORT)
 
    for {
       conn, err := l.Accept()

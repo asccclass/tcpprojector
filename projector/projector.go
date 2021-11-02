@@ -1,18 +1,84 @@
 package main
 
 import (
-   // "bufio"
+   "os"
    "fmt"
    "net"
-   "os"
    "time"
+   "bytes"
    "strings"
+   "syscall"
+   "context"
    "os/exec"
    "runtime"
+   "net/http"
+   "io/ioutil"
+   "os/signal"
    "github.com/joho/godotenv"
    "github.com/asccclass/staticfileserver/libs/ip" 
    "github.com/asccclass/staticfileserver/libs/line" 
 )
+
+var (
+   systemName   string
+   IPAddr       string
+   PORT         string
+)
+
+// off line
+func OffLine(ctx context.Context) {
+   stop := make(chan bool)
+   go func() {
+      url := os.Getenv("ProjectorServer")
+      if url != "" {
+         url += "/iamoffline/" + IPAddr 
+         _, err := http.Get(url)
+         if err != nil {
+            fmt.Println(err.Error())
+         }
+      } else {
+         fmt.Println("Can not find ProjectorServer in envfile.")
+      }
+      stop <- true
+   }()
+   select {
+      case <- ctx.Done():
+         fmt.Println("Time is out.")
+         break
+      case <-stop:
+         fmt.Println("\n" + systemName + " off line...")
+         break
+   }
+   return
+}
+
+// send ip information to projector server
+func RegisterInfo(ip, port string)(error) {
+   url := os.Getenv("ProjectorServer")
+   if url == "" {
+      return fmt.Errorf("Can not find ProjectorServer in envfile.")
+   }
+   url += "/iamonline"
+   info := fmt.Sprintf("{\"name\":\"%s\", \"ip\":\"%s\", \"port\":\"%s\"}", os.Getenv("SystemName"), ip, port)
+
+   req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(info)))
+   if err != nil {
+      return err
+   }
+   req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+   client := &http.Client{}
+   res, err := client.Do(req)
+   if err != nil {
+      return err
+   }
+   defer res.Body.Close()
+   body, err := ioutil.ReadAll(res.Body)
+   if err != nil {
+      return err
+   }
+   fmt.Println(string(body)) 
+   return nil
+}
 
 // open browser
 func openBrowser(url string) bool {
@@ -29,6 +95,7 @@ func openBrowser(url string) bool {
    return cmd.Start() == nil
 }
 
+// process connection's action
 func handleConnection(conn net.Conn) {
    remoteAddr := conn.RemoteAddr().String()
    fmt.Println("  Client connected from: " + remoteAddr)
@@ -61,7 +128,7 @@ func handleConnection(conn net.Conn) {
 }
 
 func main() {
-   systemName := os.Getenv("SystemName")
+   systemName = os.Getenv("SystemName")
    currentDir, _ := os.Getwd()
    if err := godotenv.Load(currentDir + "/envfile"); err != nil {
       fmt.Println("envfile is not exist.")
@@ -80,25 +147,40 @@ func main() {
       return 
    }
 
-   PORT := ":" + arguments[1]
+   PORT = ":" + arguments[1]
    l, err := net.Listen("tcp", PORT)
    if err != nil {
-      fmt.Println(err)
+      fmt.Println(err.Error())
       return
    }
    defer l.Close()
-
 
    // Get IP
    device := os.Getenv("InternetDevice")
    if device == "" {
       device = "wlan0"
    }
+
    ip, _ := IPService.NewIP(device)
-   fmt.Printf(systemName + " start and listening at %s:%v......\n", ip.LocalIP, PORT)
+   IPAddr = ip.LocalIP
+   fmt.Printf("%s start and listening at %s:%v......\n", systemName, IPAddr, PORT)
+   if err := RegisterInfo(IPAddr, PORT); err != nil {
+      fmt.Println(err)
+      return
+   } 
 
    // Send IP to Line
-   line.Notify.SendLINENotify(os.Getenv("LineNotifyToken"), systemName + " is online now, ip:" + ip.LocalIP)
+   line.Notify.SendLINENotify(os.Getenv("LineNotifyToken"), systemName + " is online now, ip:" + IPAddr + PORT)
+
+   interrupt := make(chan os.Signal)
+   signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+   go func() {
+      <-interrupt
+      ctx, cancel := context.WithTimeout(context.Background(), time.Second * 15)
+      defer cancel()
+      OffLine(ctx)
+      os.Exit(0)
+   }()
 
    for {
       conn, err := l.Accept()

@@ -10,6 +10,7 @@ DocumentRoot=www
 TemplateRoot=www/template
 
 InternetDevice=wlan0
+ProjectorServer=https://ascare.sinica.edu.tw/sinopedia/
 
 Proxy=
 

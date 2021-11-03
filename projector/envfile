@@ -1,4 +1,4 @@
-SystemName=Wireless Proector
+SystemName=piKB投影機
 Production=Development
 PORT=80
 DBMSType=MySQL

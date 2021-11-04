@@ -122,7 +122,7 @@ func handleConnection(conn net.Conn) {
       // conn.Write([]byte("https://www.sinica.edu.tw\n"))
       t := time.Now()
       myTime := t.Format(time.RFC3339)
-      fmt.Printf("  %v :%s\n", myTime, message)
+      fmt.Printf("  %v %s\n", myTime, message)
    }
    conn.Close()
 }
@@ -163,7 +163,7 @@ func main() {
 
    ip, _ := IPService.NewIP(device)
    IPAddr = ip.LocalIP
-   fmt.Printf("%s start and listening at %s:%v......\n", systemName, IPAddr, PORT)
+   fmt.Printf("%s start and listening at %s%s......\n", systemName, IPAddr, PORT)
    if err := RegisterInfo(IPAddr, PORT); err != nil {
       fmt.Println(err)
       return
